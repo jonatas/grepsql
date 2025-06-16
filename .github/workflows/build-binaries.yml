@@ -320,7 +320,7 @@ jobs:
           fi
 
       - name: Create or update release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.is_tag == 'true' && format('🚀 GrepSQL v{0}', steps.version.outputs.version) || format('🔧 Development Build - {0}', steps.version.outputs.version) }}
