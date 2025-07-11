@@ -39,6 +39,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -53,26 +54,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential libc6-dev
 
-      - name: Run comprehensive build script
+      - name: Run build script (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          ./scripts/build.ps1
+
+      - name: Run comprehensive build script (Unix)
+        if: matrix.os != 'windows-latest'
         shell: bash
         run: |
-          # Skip entire native build on Windows - needs different toolchain
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            echo "🏗️ Building for Windows (partial support)..."
-            echo "Skipping native library build on Windows - .NET code will be tested without native dependencies"
-            echo "Windows would need MSVC/Visual Studio build tools for native compilation"
-            
-            # Initialize submodules and build .NET only
-            git submodule update --init --recursive
-            dotnet restore
-            dotnet build --configuration Release --no-restore
-            exit 0
-          fi
-          
           echo "🏗️ Running comprehensive build script..."
           chmod +x scripts/build.sh
           ./scripts/build.sh
-          
+
           # Verify the build was successful
           echo "📋 Verifying build output:"
           find src/GrepSQL/runtimes/ -name "libpgquery_wrapper.*" -type f || echo "No native libraries found"
@@ -121,7 +116,18 @@ jobs:
             echo "Warning: Native library not found at src/GrepSQL/runtimes/$TARGET_RID/native/libpgquery_wrapper.$LIBRARY_EXT"
             echo "Available files in src/GrepSQL/runtimes/:"
             find src/GrepSQL/runtimes/ -name "*.so" -o -name "*.dylib" || echo "No native libraries found"
-          fi
+        fi
+
+      - name: Copy native libraries to test project (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $TARGET_RID = 'win-x64'
+          $LIB_PATH = "src\GrepSQL\runtimes\$TARGET_RID\native\libpgquery_wrapper.dll"
+          $TEST_OUTPUT = "tests\GrepSQL.Tests\bin\Release\net9.0"
+          New-Item -ItemType Directory -Force -Path "$TEST_OUTPUT\runtimes\$TARGET_RID\native" | Out-Null
+          Copy-Item $LIB_PATH "$TEST_OUTPUT\runtimes\$TARGET_RID\native" -Force
+          Copy-Item $LIB_PATH $TEST_OUTPUT -Force
 
       - name: Run tests
         timeout-minutes: 10
