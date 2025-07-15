@@ -1,5 +1,9 @@
 name: Build and Release Binaries
 
+permissions:
+  contents: write
+  packages: write
+
 on:
   push:
     branches: [main]
@@ -68,35 +72,56 @@ jobs:
           echo "📋 Checking generated native libraries:"
           find src/GrepSQL/runtimes/ -name "libpgquery_wrapper.*" -type f || echo "No native libraries found"
 
-      - name: Build for Windows (Placeholder)
+      - name: Install protoc on Windows
         if: runner.os == 'Windows'
-        shell: cmd
+        run: choco install protoc -y
+
+      - name: Setup MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build for Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          echo "🏗️ Building for Windows (partial support)..."
-          
-          REM Initialize submodules
           git submodule update --init --recursive
-          
-          REM Create placeholder directory structure
-          mkdir "src\GrepSQL\runtimes\win-x64\native" 2>nul
-          
-          REM Create a minimal dummy DLL to satisfy the .NET runtime
-          echo. > "src\GrepSQL\runtimes\win-x64\native\libpgquery_wrapper.dll"
-          
-          REM Build .NET project only
-          dotnet restore
-          dotnet build --configuration Release --no-restore
-          echo "⚠️ Windows build completed with placeholder native library"
+          ./scripts/build.ps1
 
       - name: Test (non-Windows)
         if: runner.os != 'Windows'
         run: dotnet test --configuration Release --no-build --verbosity normal
 
-      - name: Test (Windows - without native dependencies)
+      - name: Restore test project (Windows)
         if: runner.os == 'Windows'
+        run: dotnet restore "tests/GrepSQL.Tests/GrepSQL.Tests.csproj"
+
+      - name: Build test project (Windows)
+        if: runner.os == 'Windows'
+        run: dotnet build "tests/GrepSQL.Tests/GrepSQL.Tests.csproj" --configuration Release -p:Platform="Any CPU" --no-restore
+
+      - name: Copy native wrapper for tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          echo "Running limited tests on Windows..."
-          # dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=RequiresNative"
+          Remove-Item Env:Platform -ErrorAction SilentlyContinue
+
+          $testOut = "tests\GrepSQL.Tests\bin\Release\net9.0"
+          New-Item -ItemType Directory -Path $testOut -Force | Out-Null
+
+          Copy-Item `
+            -Path "src\GrepSQL\runtimes\win-x64\native\libpgquery_wrapper.dll" `
+            -Destination $testOut `
+            -Force
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Unset Platform so --no-build test finds the DLL
+          Remove-Item Env:Platform -ErrorAction SilentlyContinue
+          dotnet test "tests/GrepSQL.Tests/GrepSQL.Tests.csproj" `
+            --configuration Release `
+            --verbosity normal
 
       - name: Publish GrepSQL Binary
         run: dotnet publish src/GrepSQL.CLI/GrepSQL/GrepSQL.csproj --configuration Release --runtime ${{ matrix.platform }} --self-contained true --output ./publish/${{ matrix.platform }} -p:PublishSingleFile=true -p:PublishTrimmed=true -p:IncludeNativeLibrariesForSelfExtract=true

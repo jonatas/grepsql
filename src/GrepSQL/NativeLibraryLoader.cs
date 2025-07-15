@@ -22,7 +22,7 @@ namespace GrepSQL
                 {
                     var assemblyLocation = Assembly.GetExecutingAssembly().Location;
                     var assemblyDirectory = Path.GetDirectoryName(assemblyLocation);
-                    
+
                     // More robust runtime identification
                     var rid = GetRuntimeIdentifier();
                     var libraryName = GetLibraryFileName();
@@ -68,11 +68,11 @@ namespace GrepSQL
             var rid = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win-" :
                      RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "linux-" :
                      RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "osx-" : "any-";
-            
+
             rid += RuntimeInformation.ProcessArchitecture switch
             {
                 Architecture.X64 => "x64",
-                Architecture.X86 => "x86", 
+                Architecture.X86 => "x86",
                 Architecture.Arm64 => "arm64",
                 Architecture.Arm => "arm",
                 _ => "x64"
@@ -86,13 +86,13 @@ namespace GrepSQL
             // Handle M1 Mac fallback
             if (primaryRid == "osx-arm64")
                 return new[] { "osx-x64", "osx-arm64" };
-            
+
             if (primaryRid.StartsWith("linux-"))
                 return new[] { "linux-x64", primaryRid };
-                
+
             if (primaryRid.StartsWith("win-"))
                 return new[] { "win-x64", "win-x86", primaryRid };
-                
+
             return new[] { primaryRid };
         }
 
@@ -126,7 +126,7 @@ namespace GrepSQL
             }
         }
 
-        [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)]
+        [DllImport("kernel32.dll", EntryPoint = "LoadLibraryW", SetLastError = true, CharSet = CharSet.Unicode)]
         private static extern IntPtr LoadLibraryWindows(string lpFileName);
 
         [DllImport("libdl", CharSet = CharSet.Ansi)]
